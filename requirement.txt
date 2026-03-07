@@ -1,5 +1,5 @@
 streamlit
 pandas
-bcrypt
+bcrypt>=4.0.0
 plotly
 passlib
