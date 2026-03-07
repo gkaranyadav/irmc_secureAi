@@ -6,7 +6,7 @@ import streamlit as st
 import sys
 from pathlib import Path
 
-# Add pages directory to path
+# Add current directory to path
 sys.path.append(str(Path(__file__).parent))
 
 # Page config
