@@ -26,6 +26,11 @@ def show():
         font-weight: 700;
         margin: 1.5rem 0;
     }
+    .stButton > button {
+        background: linear-gradient(135deg, #DC2626, #7F1D1D);
+        color: white;
+        border: none;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -40,14 +45,14 @@ def show():
             full_name = st.text_input("**Full Name**", placeholder="Enter your full name")
             username = st.text_input("**Username**", placeholder="Choose a username")
             email = st.text_input("**Email**", placeholder="Enter your email")
-            password = st.text_input("**Password**", type="password", placeholder="Create a password")
+            password = st.text_input("**Password**", type="password", placeholder="Create a password (min 6 characters)")
             confirm_password = st.text_input("**Confirm Password**", type="password", placeholder="Confirm your password")
             
             col1, col2 = st.columns(2)
             with col1:
                 role = st.selectbox("**Role**", ["analyst", "investigator", "viewer"])
             with col2:
-                department = st.text_input("**Department (Optional)**", placeholder="e.g., Fraud Investigation")
+                department = st.text_input("**Department**", placeholder="e.g., Fraud Investigation")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -65,12 +70,13 @@ def show():
                 elif len(password) < 6:
                     st.error("❌ Password must be at least 6 characters")
                 else:
-                    result = register_user(username, email, password, full_name, role, department)
-                    if result["success"]:
-                        st.success("✅ Registration successful! Please login.")
-                        st.session_state.page = "login"
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {result['message']}")
+                    with st.spinner("Creating account..."):
+                        result = register_user(username, email, password, full_name, role, department)
+                        if result["success"]:
+                            st.success("✅ Registration successful! Please login.")
+                            st.session_state.page = "login"
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {result['message']}")
         
         st.markdown('</div>', unsafe_allow_html=True)
