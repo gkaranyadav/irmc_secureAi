@@ -1,25 +1,26 @@
 """
 Database module for iRMC SecureAI
-Handles user registration and authentication
+Using werkzeug.security - pure Python, no compilation needed!
 """
 
 import sqlite3
-import bcrypt
 import pandas as pd
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
 class Database:
     def __init__(self, db_path="irmc_secureai.db"):
         self.db_path = db_path
         self.init_database()
+        print("✅ Database initialized with werkzeug security")
     
     def init_database(self):
         """Initialize users table"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Users table (for both admins and analysts)
+        # Users table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,18 +36,26 @@ class Database:
         )
         ''')
         
-        # Create default admin if no users exist
+        # Check if any user exists
         cursor.execute("SELECT COUNT(*) FROM users")
         count = cursor.fetchone()[0]
         
         if count == 0:
             # Create default admin
-            password_hash = bcrypt.hashpw("Admin@123".encode(), bcrypt.gensalt())
+            password_hash = generate_password_hash("Admin@123")
             cursor.execute('''
             INSERT INTO users (username, email, password_hash, full_name, role, department)
             VALUES (?, ?, ?, ?, ?, ?)
-            ''', ("admin", "admin@irmc.com", password_hash.decode(), "System Administrator", "admin", "IT"))
-            print("✅ Default admin created")
+            ''', ("admin", "admin@irmc.com", password_hash, "System Administrator", "admin", "IT"))
+            
+            # Create a demo analyst
+            password_hash2 = generate_password_hash("demo123")
+            cursor.execute('''
+            INSERT INTO users (username, email, password_hash, full_name, role, department)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''', ("analyst", "analyst@irmc.com", password_hash2, "Demo Analyst", "analyst", "Fraud Investigation"))
+            
+            print("✅ Default users created (admin/analyst)")
         
         conn.commit()
         conn.close()
@@ -60,16 +69,17 @@ class Database:
             # Check if user exists
             cursor.execute("SELECT id FROM users WHERE username = ? OR email = ?", (username, email))
             if cursor.fetchone():
+                conn.close()
                 return {"success": False, "message": "Username or email already exists"}
             
-            # Hash password
-            password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
+            # Hash password using werkzeug
+            password_hash = generate_password_hash(password)
             
             # Insert user
             cursor.execute('''
             INSERT INTO users (username, email, password_hash, full_name, role, department)
             VALUES (?, ?, ?, ?, ?, ?)
-            ''', (username, email, password_hash.decode(), full_name, role, department))
+            ''', (username, email, password_hash, full_name, role, department))
             
             conn.commit()
             user_id = cursor.lastrowid
@@ -105,8 +115,8 @@ class Database:
                 conn.close()
                 return {"success": False, "message": "Account is deactivated"}
             
-            # Verify password
-            if bcrypt.checkpw(password.encode(), password_hash.encode()):
+            # Verify using werkzeug
+            if check_password_hash(password_hash, password):
                 # Update last login
                 cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', 
                              (datetime.now(), user_id))
@@ -129,6 +139,33 @@ class Database:
                 
         except Exception as e:
             return {"success": False, "message": f"Authentication error: {str(e)}"}
+    
+    def get_user_by_id(self, user_id):
+        """Get user by ID"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute('''
+            SELECT id, username, email, full_name, role, department, created_at, last_login
+            FROM users WHERE id = ?
+            ''', (user_id,))
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                return {
+                    "id": result[0],
+                    "username": result[1],
+                    "email": result[2],
+                    "full_name": result[3],
+                    "role": result[4],
+                    "department": result[5],
+                    "created_at": result[6],
+                    "last_login": result[7]
+                }
+            return None
+        except:
+            return None
 
 # Create global database instance
 db = Database()
