@@ -1,4 +1,4 @@
 streamlit
 pandas
 plotly
-Werkzeug
+werkzeug==3.1.6
