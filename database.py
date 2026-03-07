@@ -1,19 +1,78 @@
 """
 Database module for iRMC SecureAI
-Using werkzeug.security - pure Python, no compilation needed!
+Pure Python implementation - NO external dependencies!
+Uses hashlib which is built into Python
 """
 
 import sqlite3
 import pandas as pd
 from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
+import hashlib
 import os
+import binascii
+
+class PasswordHasher:
+    """Pure Python password hashing - no external dependencies!"""
+    
+    @staticmethod
+    def hash_password(password):
+        """
+        Hash password using PBKDF2 with SHA256
+        This is built into Python - no external libraries needed!
+        """
+        # Generate a random salt
+        salt = os.urandom(32)
+        
+        # Hash the password with 100,000 iterations
+        key = hashlib.pbkdf2_hmac(
+            'sha256',
+            password.encode('utf-8'),
+            salt,
+            100000  # Number of iterations
+        )
+        
+        # Store as salt:key in hex format
+        salt_hex = binascii.hexlify(salt).decode()
+        key_hex = binascii.hexlify(key).decode()
+        
+        return f"{salt_hex}:{key_hex}"
+    
+    @staticmethod
+    def verify_password(password, stored_hash):
+        """
+        Verify password against stored hash
+        """
+        try:
+            # Split stored hash into salt and key
+            salt_hex, key_hex = stored_hash.split(':')
+            
+            # Convert back to bytes
+            salt = binascii.unhexlify(salt_hex)
+            stored_key = binascii.unhexlify(key_hex)
+            
+            # Hash the provided password with the same salt
+            new_key = hashlib.pbkdf2_hmac(
+                'sha256',
+                password.encode('utf-8'),
+                salt,
+                100000
+            )
+            
+            # Compare securely
+            return new_key == stored_key
+            
+        except Exception as e:
+            print(f"Password verification error: {e}")
+            return False
+
+# Create global hasher instance
+hasher = PasswordHasher()
 
 class Database:
     def __init__(self, db_path="irmc_secureai.db"):
         self.db_path = db_path
         self.init_database()
-        print("✅ Database initialized with werkzeug security")
+        print("✅ Database initialized with pure Python hashing")
     
     def init_database(self):
         """Initialize users table"""
@@ -42,18 +101,18 @@ class Database:
         
         if count == 0:
             # Create default admin
-            password_hash = generate_password_hash("Admin@123")
+            admin_hash = hasher.hash_password("Admin@123")
             cursor.execute('''
             INSERT INTO users (username, email, password_hash, full_name, role, department)
             VALUES (?, ?, ?, ?, ?, ?)
-            ''', ("admin", "admin@irmc.com", password_hash, "System Administrator", "admin", "IT"))
+            ''', ("admin", "admin@irmc.com", admin_hash, "System Administrator", "admin", "IT"))
             
             # Create a demo analyst
-            password_hash2 = generate_password_hash("demo123")
+            analyst_hash = hasher.hash_password("demo123")
             cursor.execute('''
             INSERT INTO users (username, email, password_hash, full_name, role, department)
             VALUES (?, ?, ?, ?, ?, ?)
-            ''', ("analyst", "analyst@irmc.com", password_hash2, "Demo Analyst", "analyst", "Fraud Investigation"))
+            ''', ("analyst", "analyst@irmc.com", analyst_hash, "Demo Analyst", "analyst", "Fraud Investigation"))
             
             print("✅ Default users created (admin/analyst)")
         
@@ -72,8 +131,8 @@ class Database:
                 conn.close()
                 return {"success": False, "message": "Username or email already exists"}
             
-            # Hash password using werkzeug
-            password_hash = generate_password_hash(password)
+            # Hash password using our pure Python hasher
+            password_hash = hasher.hash_password(password)
             
             # Insert user
             cursor.execute('''
@@ -115,8 +174,8 @@ class Database:
                 conn.close()
                 return {"success": False, "message": "Account is deactivated"}
             
-            # Verify using werkzeug
-            if check_password_hash(password_hash, password):
+            # Verify using our pure Python hasher
+            if hasher.verify_password(password, password_hash):
                 # Update last login
                 cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', 
                              (datetime.now(), user_id))
